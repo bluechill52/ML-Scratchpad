@@ -3,32 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 from torchvision import transforms
-
-
-
-class AlexNet(nn.Sequential):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = nn.Conv2d(3, 10, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.relu = nn.ReLU()
-        self.bn1 = nn.BatchNorm2d(10)
-        self.conv2 = nn.Conv2d(10, 16, 3)
-        self.bn2 = nn.BatchNorm2d(16)
-        self.fc1 = nn.Linear(16 * 6 * 6, 120)
-        self.bn3 = nn.BatchNorm1d(120)
-        self.fc2 = nn.Linear(120, 84)
-        self.bn4 = nn.BatchNorm1d(84)
-        self.fc3 = nn.Linear(84, 10)
-
-    def forward(self, x):
-        x = self.bn1(self.pool(self.relu(self.conv1(x))))
-        x = self.bn2(self.pool(self.relu(self.conv2(x))))
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
-        x = self.bn3(self.fc1(x))
-        x = self.bn4(self.fc2(x))
-        x = self.fc3(x)
-        return x
+from models import CustomNet
 
 
 def compute_accuracy(model, loader, device):
@@ -52,56 +27,64 @@ def compute_accuracy(model, loader, device):
     return accuracy
     
     
-def download():
+def download(data_root, batch_size):
     transform = transforms.Compose(
         [transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
-    batch_size = 128
-
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+    trainset = torchvision.datasets.CIFAR10(root=data_root, train=True,
                                             download=True, transform=transform)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
                                             shuffle=True, num_workers=2)
 
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+    testset = torchvision.datasets.CIFAR10(root=data_root, train=False,
                                         download=True, transform=transform)
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                                             shuffle=False, num_workers=2)
 
-    classes = ('plane', 'car', 'bird', 'cat',
-            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-    epochs = 10
-    
+    return trainloader, testloader
+
+
+def train(trainloader, testloader, num_epochs, learning_rate, momentum):    
     device = torch.device('cuda')
     
-    net = AlexNet().to(device)
+    net = CustomNet().to(device)
     
     print(f'Total number of parameters in network: {sum(p.numel() for p in net.parameters())}')
     
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=momentum)
     
     loss_vals = []
     train_accuracies = []
     test_accuracies = []
     
-    for epoch in range(epochs):
+    for epoch in range(num_epochs):
         running_loss = 0.0
+        
+        # Iterate over each batch
         for idx, data in enumerate(trainloader):
             features, labels = data[0].to(device), data[1].to(device)
             
+            # Forward pass features through net to get predictions
             preds = net(features)
             
+            # Initialize optimizer
             optimizer.zero_grad()
+            
+            # Get loss from criterion based on predictions and actual labels
             loss = criterion(preds, labels)
+            
+            # Backpropagate loss through net
             loss.backward()
+            
+            # Step through optimizer
             optimizer.step()
             
             running_loss += loss.item()
         
         epoch_loss = running_loss / len(trainloader)
-        print(f"Epoch {epoch + 1} / {epochs}, Loss: {epoch_loss}")
+        print(f"Epoch {epoch + 1} / {num_epochs}, Loss: {epoch_loss}")
         
         # Compute accuracy after each epoch
         train_accuracy = compute_accuracy(net, trainloader, device)
@@ -123,4 +106,16 @@ if __name__ == '__main__':
     # Initialize optimizer
     # Loop over each batch
     
-    download()
+    data_root = './data'
+    batch_size = 128
+    num_epochs = 10
+    learning_rate = 0.001
+    momentum = 0.9
+    
+    classes = ('plane', 'car', 'bird', 'cat', 
+               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+    
+    trainloader, testloader = download(data_root, batch_size)
+    
+    train(trainloader, testloader, num_epochs, learning_rate, momentum)
+    
