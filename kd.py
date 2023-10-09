@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 from torchvision import transforms
-from models import CustomNet
+from models import CustomNet, SmallNet
 
 
 def compute_accuracy(model, loader, device):
@@ -45,11 +45,7 @@ def download(data_root, batch_size):
     return trainloader, testloader
 
 
-def train(trainloader, testloader, num_epochs, learning_rate, momentum):    
-    device = torch.device('cuda')
-    
-    net = CustomNet().to(device)
-    
+def train(net, trainloader, testloader, num_epochs, learning_rate, momentum, device):
     print(f'Total number of parameters in network: {sum(p.numel() for p in net.parameters())}')
     
     criterion = nn.CrossEntropyLoss()
@@ -95,7 +91,14 @@ def train(trainloader, testloader, num_epochs, learning_rate, momentum):
         train_accuracies.append(train_accuracy)
         test_accuracies.append(test_accuracy)
         
-    print('Done')
+    params = {
+        'Model' : net,
+        'Epoch_losses' : loss_vals,
+        'Train_accuracies' : train_accuracies,
+        'Test_accuracies' : test_accuracies
+    }
+    
+    return params
     
     
 if __name__ == '__main__':
@@ -108,14 +111,24 @@ if __name__ == '__main__':
     
     data_root = './data'
     batch_size = 128
-    num_epochs = 10
+    num_epochs = 100
     learning_rate = 0.001
     momentum = 0.9
     
     classes = ('plane', 'car', 'bird', 'cat', 
                'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     
+    device = torch.device('cuda')
+    
     trainloader, testloader = download(data_root, batch_size)
     
-    train(trainloader, testloader, num_epochs, learning_rate, momentum)
+    # Train big network
+    big_net = CustomNet().to(device)
+    big_train_info = train(big_net, trainloader, testloader, num_epochs, learning_rate, momentum, device)
     
+    # Optionally save trained model weights
+    small_net = SmallNet().to(device)
+    small_train_info = train(small_net, trainloader, testloader, num_epochs, learning_rate, momentum, device)
+    print(f'Total number of parameters in network: {sum(p.numel() for p in small_net.parameters())}')
+    
+    print('Done')
