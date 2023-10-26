@@ -17,7 +17,7 @@ def predict(X, Y, w, b):
         mse += (y_true - y_pred) ** 2
     
     mse /= num_samples
-        
+    
     return mse
 
     

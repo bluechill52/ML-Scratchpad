@@ -28,10 +28,9 @@ class PascalVOC2012(Dataset):
         label = [0] * 20
         #>>> [x for x in range(1,21)]
         #[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-        for classnum in range(1,21):
+        for classnum in range(1, 21):
             if classnum in classes:
-                #Python is zero-indexed so we have to subtract one
-                label[classnum-1] = 1
+                label[classnum - 1] = 1
         return label
     
     
@@ -40,6 +39,10 @@ class PascalVOC2012(Dataset):
         
         targetpil = targetpil.resize((320, 320), resample=PIL.Image.NEAREST)
         target = np.array(targetpil).astype('int').squeeze()
+        
+        # Replace 255 value to 0
+        target[target == 255] = 0
+        
         label = torch.Tensor(self.__get_label_vector__(targetpil))
         
         #convert image to Tensor and normalize
