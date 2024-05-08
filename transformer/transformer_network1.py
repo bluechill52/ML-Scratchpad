@@ -1,18 +1,21 @@
+import os
 import math
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
+from datasets import createDataloaderV1, DatasetV1
+from tokenizers import SimpleTokenizer
 
 
 class AttentionBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, cfg):
         super(AttentionBlock, self).__init__()
         
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.wk = nn.Linear(in_channels, out_channels, bias=True)
-        self.wq = nn.Linear(in_channels, out_channels, bias=True)
-        self.wv = nn.Linear(in_channels, out_channels, bias=True)
+        self.in_channels = cfg['embedding_dim']
+        self.out_channels = cfg['qkv_dim']
+        self.wk = nn.Linear(self.in_channels, self.out_channels, bias=True)
+        self.wq = nn.Linear(self.in_channels, self.out_channels, bias=True)
+        self.wv = nn.Linear(self.in_channels, self.out_channels, bias=True)
         
     def forward(self, x):
         K = self.wk(x)
@@ -23,12 +26,12 @@ class AttentionBlock(nn.Module):
 
 
 class MultiHeadAttentionBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, num_heads):
+    def __init__(self, cfg):
         super(MultiHeadAttentionBlock, self).__init__()
         
-        self.num_heads = num_heads
-        self.MHABlock = nn.ModuleList([AttentionBlock(in_channels, out_channels) for _ in range(num_heads)])
-        self.wo = nn.Linear(len(self.MHABlock) * out_channels, in_channels)
+        self.num_heads = cfg['num_heads']
+        self.MHABlock = nn.ModuleList([AttentionBlock(cfg) for _ in range(cfg['num_heads'])])
+        self.wo = nn.Linear(len(self.MHABlock) * cfg['qkv_dim'], cfg['embedding_dim'])
     
     def forward(self, x):
         z = torch.cat([head(x) for head in self.MHABlock], 1)
@@ -36,23 +39,23 @@ class MultiHeadAttentionBlock(nn.Module):
 
 
 class TransformerLayer(nn.Module):
-    def __init__(self, in_channels, out_channels, num_heads):
+    def __init__(self, cfg):
         super(TransformerLayer, self).__init__()
         
-        self.mha = MultiHeadAttentionBlock(in_channels, out_channels, num_heads)
-        self.norm = nn.LayerNorm(in_channels)
+        self.mha = MultiHeadAttentionBlock(cfg)
+        self.norm = nn.LayerNorm(cfg['context_length'])
         
     def forward(self, x):
         return self.norm(x + self.mha(x))
 
 
 class Feedforward(nn.Module):
-    def __init__(self, in_channels, hidden_channels):
+    def __init__(self, cfg):
         super(Feedforward, self).__init__()
         
-        self.layer1 = nn.Linear(in_channels, hidden_channels)
+        self.layer1 = nn.Linear(cfg['embedding_dim'], cfg['ff_hidden_dim'])
         self.activation = nn.GELU()
-        self.layer2 = nn.Linear(hidden_channels, in_channels)
+        self.layer2 = nn.Linear(cfg['ff_hidden_dim'], cfg['embedding_dim'])
     
     def forward(self, x):
         x = self.layer1(x)
@@ -61,34 +64,29 @@ class Feedforward(nn.Module):
 
         
 class TransformerEncoder(nn.Module):
-    def __init__(self, in_channels, ff_hidden_channels, out_channels, num_heads, num_layers):
+    def __init__(self, cfg):
         super(TransformerEncoder, self).__init__()
         
-        self.num_layers = num_layers
+        self.num_layers = cfg['num_transformer_layers']
         
-        self.encoder = nn.Sequential(
-            *[TransformerLayer(in_channels, out_channels, num_heads) for _ in range(num_layers)]
+        self.encoder_stack = nn.Sequential(
+            *[TransformerLayer(cfg) for _ in range(cfg['num_transformer_layers'])]
         )
         
-        self.ff = Feedforward(in_channels, ff_hidden_channels)
+        self.ff = Feedforward(cfg)
     
     def forward(self, x):
-        x = self.encoder(x)
+        x = self.encoder_stack(x)
         return self.ff(x) + x
 
 
 class Model(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 ff_hidden_channels,
-                 attention_out_channels,
-                 num_attention_heads,
-                 num_transformer_layers):
+    def __init__(self, cfg):
         super(Model, self).__init__()
         
         # Embedding layer - nn.Linear
-        self.input_embedding = nn.Linear(in_channels, in_channels)
-        self.pos_embedding = nn.Linear(in_channels, in_channels)
+        self.input_embedding = nn.Embedding(cfg['vocab_size'], cfg['embedding_dim'])
+        self.pos_embedding = nn.Embedding(cfg['context_length'], cfg['embedding_dim'])
         
         # Transformer encoder
             # N transformer layers
@@ -100,14 +98,14 @@ class Model(nn.Module):
                 # Linear
                 # Activation function
                 # Linear
-        self.encoder = TransformerEncoder(in_channels,
-                                          ff_hidden_channels,
-                                          attention_out_channels,
-                                          num_attention_heads,
-                                          num_transformer_layers)
+        self.encoder = TransformerEncoder(cfg)
     
     def forward(self, x):
-        x = self.input_embedding(x) + self.pos_embedding(x)
+        batch_size, seq_len = x.shape
+        x = self.input_embedding(x) + self.pos_embedding(torch.arange(seq_len))
+        
+        A = AttentionBlock(cfg)
+        print(A(x))
         x = self.encoder(x)
         return x
         
@@ -115,17 +113,31 @@ class Model(nn.Module):
 
 if __name__ == '__main__':
     # Configuration
-    NUM_SAMPLES = 5
-    EMBEDDING_DIM = 10
-    KEY_DIM = 256
-    FF_HIDDEN_DIM = 64
-    QUERY_DIM = 256
-    VALUE_DIM = 256
-    NUM_HEADS = 4
-    NUM_TRANSFORMER_LAYERS = 4
+    cfg = {
+        'batch_size' : 4,
+        'stride' : 1,
+        'context_length' : 5,
+        'embedding_dim' : 10,
+        'qkv_dim' : 256,
+        'ff_hidden_dim' : 64,
+        'num_heads' : 4,
+        'num_transformer_layers' : 4
+    }
+    
+    
+    fname = 'the-verdict.txt'
 
-    x = torch.randn((NUM_SAMPLES, EMBEDDING_DIM))
-    print(x)
+    tokenizer = SimpleTokenizer(fname)
+    with open(os.path.join(os.getcwd(), fname), 'r', encoding='utf-8') as f:
+        raw_text = f.read()
 
-    M = Model(EMBEDDING_DIM, FF_HIDDEN_DIM, KEY_DIM, NUM_HEADS, NUM_TRANSFORMER_LAYERS)
-    print(M(x).shape)
+    dataset = DatasetV1(raw_text, tokenizer, cfg)
+    dataloader = createDataloaderV1(raw_text, tokenizer, cfg)
+    
+    data_iter = iter(dataloader)
+    ip, target = next(data_iter)
+    
+    cfg['vocab_size'] = tokenizer.getVocabSize()
+    
+    M = Model(cfg)
+    print(M(ip).shape)

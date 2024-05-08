@@ -27,6 +27,9 @@ class SimpleTokenizer:
     def decode(self, ids):
         tokens = [self.decode_map[id] for id in ids]
         return ' '.join(tokens)
+    
+    def getVocabSize(self):
+        return len(self.vocab)
         
 
 if __name__ == '__main__':

@@ -6,13 +6,16 @@ from tokenizers import SimpleTokenizer
 
 
 class DatasetV1(Dataset):
-    def __init__(self, text, tokenizer, context_size, stride):
+    def __init__(self, text, tokenizer, cfg):
         super(DatasetV1, self).__init__()
         
         token_ids = tokenizer.encode(text)
         
         self.input_ids = []
         self.target_ids = []
+        
+        context_size = cfg['context_length']
+        stride = cfg['stride']
         
         # Create input ids and target ids using sliding window of context size and stride
         start_idx = 0
@@ -32,14 +35,14 @@ class DatasetV1(Dataset):
             print(target_id)
 
 
-def createDataloaderV1(text, tokenizer, batch_size=4, context_size=256, stride=128, shuffle=True, drop_last=True, num_workers=8):
+def createDataloaderV1(text, tokenizer, cfg, shuffle=True, drop_last=True, num_workers=8):
     # Create dataset
-    dataset = DatasetV1(text, tokenizer, context_size, stride)
+    dataset = DatasetV1(text, tokenizer, cfg)
 
     # Create dataloader
     dataloader = DataLoader(
         dataset,
-        batch_size=batch_size,
+        batch_size=cfg['batch_size'],
         shuffle=shuffle,
         drop_last=drop_last,
         num_workers=num_workers
