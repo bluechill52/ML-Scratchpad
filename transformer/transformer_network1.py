@@ -22,7 +22,9 @@ class AttentionBlock(nn.Module):
         Q = self.wq(x)
         V = self.wv(x)
         
-        return F.softmax(Q @ K.T/ math.sqrt(self.out_channels), dim=1) @ V
+        # Self-attention matrix - (batch_size x context_length x context_length)
+        # Softmax along each row of each batch sample - 3rd dimension of self-attention matrix
+        return F.softmax(Q @ K.transpose(1, 2) / math.sqrt(self.out_channels), dim=2) @ V
 
 
 class MultiHeadAttentionBlock(nn.Module):
@@ -34,19 +36,8 @@ class MultiHeadAttentionBlock(nn.Module):
         self.wo = nn.Linear(len(self.MHABlock) * cfg['qkv_dim'], cfg['embedding_dim'])
     
     def forward(self, x):
-        z = torch.cat([head(x) for head in self.MHABlock], 1)
+        z = torch.cat([head(x) for head in self.MHABlock], 2)
         return self.wo(z)
-
-
-class TransformerLayer(nn.Module):
-    def __init__(self, cfg):
-        super(TransformerLayer, self).__init__()
-        
-        self.mha = MultiHeadAttentionBlock(cfg)
-        self.norm = nn.LayerNorm(cfg['context_length'])
-        
-    def forward(self, x):
-        return self.norm(x + self.mha(x))
 
 
 class Feedforward(nn.Module):
@@ -62,6 +53,35 @@ class Feedforward(nn.Module):
         x = self.activation(x)
         return self.layer2(x)
 
+
+class TransformerLayer(nn.Module):
+    def __init__(self, cfg):
+        super(TransformerLayer, self).__init__()
+        
+        self.dropout = nn.Dropout(cfg['dropout_rate'])
+        self.mha = MultiHeadAttentionBlock(cfg)
+        self.norm = nn.LayerNorm(cfg['embedding_dim'])
+        self.ff = Feedforward(cfg)
+        
+    def forward(self, x):
+        # First step
+        x_ = x
+        x = self.norm(x)
+        x = self.mha(x)
+        x = self.dropout(x)
+        
+        # Skip connection
+        y = x + x_
+        
+        # Second step
+        y_ = y
+        y = self.norm(y)
+        y = self.ff(y)
+        y = self.dropout(y)
+        
+        # Skip connection
+        return y + y_
+
         
 class TransformerEncoder(nn.Module):
     def __init__(self, cfg):
@@ -72,12 +92,10 @@ class TransformerEncoder(nn.Module):
         self.encoder_stack = nn.Sequential(
             *[TransformerLayer(cfg) for _ in range(cfg['num_transformer_layers'])]
         )
-        
-        self.ff = Feedforward(cfg)
     
     def forward(self, x):
         x = self.encoder_stack(x)
-        return self.ff(x) + x
+        return x
 
 
 class Model(nn.Module):
@@ -99,16 +117,43 @@ class Model(nn.Module):
                 # Activation function
                 # Linear
         self.encoder = TransformerEncoder(cfg)
+        self.linear = nn.Linear(cfg['embedding_dim'], cfg['vocab_size'])
     
     def forward(self, x):
         batch_size, seq_len = x.shape
         x = self.input_embedding(x) + self.pos_embedding(torch.arange(seq_len))
-        
-        A = AttentionBlock(cfg)
-        print(A(x))
         x = self.encoder(x)
-        return x
+        logits = self.linear(x)
+        return logits
         
+
+def generate_text_simple(model, idx, max_new_tokens, context_size):
+    # idx is (batch, n_tokens) array of indices in the current context
+    for _ in range(max_new_tokens):
+        
+        # Crop current context if it exceeds the supported context size
+        # E.g., if LLM supports only 5 tokens, and the context size is 10
+        # then only the last 5 tokens are used as context
+        idx_cond = idx[:, -context_size:]
+        
+        # Get the predictions
+        with torch.no_grad():
+            logits = model(idx_cond)
+        
+        # Focus only on the last time step
+        # (batch, n_tokens, vocab_size) becomes (batch, vocab_size)
+        logits = logits[:, -1, :]  
+
+        # Apply softmax to get probabilities
+        probas = torch.softmax(logits, dim=-1)  # (batch, vocab_size)
+
+        # Get the idx of the vocab entry with the highest probability value
+        idx_next = torch.argmax(probas, dim=-1, keepdim=True)  # (batch, 1)
+
+        # Append sampled index to the running sequence
+        idx = torch.cat((idx, idx_next), dim=1)  # (batch, n_tokens+1)
+
+    return idx
 
 
 if __name__ == '__main__':
@@ -121,7 +166,8 @@ if __name__ == '__main__':
         'qkv_dim' : 256,
         'ff_hidden_dim' : 64,
         'num_heads' : 4,
-        'num_transformer_layers' : 4
+        'num_transformer_layers' : 4,
+        'dropout_rate' : 0.1,
     }
     
     
@@ -140,4 +186,26 @@ if __name__ == '__main__':
     cfg['vocab_size'] = tokenizer.getVocabSize()
     
     M = Model(cfg)
-    print(M(ip).shape)
+    
+    # Evaluate model
+    M.eval() # disable dropout
+    start_context = "Money's only"
+
+    encoded = tokenizer.encode(start_context)
+    print("encoded:", encoded)
+
+    encoded_tensor = torch.tensor(encoded).unsqueeze(0)
+    print("encoded_tensor.shape:", encoded_tensor.shape)
+
+    out = generate_text_simple(
+        model=M,
+        idx=encoded_tensor,
+        max_new_tokens=6,
+        context_size=cfg['context_length']
+    )
+
+    print("Output:", out)
+    print("Output length:", len(out[0]))
+    
+    decoded_text = tokenizer.decode(out.squeeze(0).tolist())
+    print(decoded_text)
