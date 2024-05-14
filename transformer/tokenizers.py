@@ -12,6 +12,7 @@ class SimpleTokenizer:
         self.vocab = sorted(list(set(tokens)))
         self.encode_map = {token : idx for idx, token in enumerate(self.vocab)}
         self.decode_map = {idx : token for idx, token in enumerate(self.encode_map)}
+        self.n_vocab = len(self.vocab)
         
     def tokenize(self, text):
         # Tokenize on punctuations and whitespace
