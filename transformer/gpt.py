@@ -55,7 +55,7 @@ class TransformerLayer(nn.Module):
     def __init__(self, cfg):
         super(TransformerLayer, self).__init__()
         
-        self.dropout = nn.Dropout(cfg['dropout_rate'])
+        self.dropout = nn.Dropout(cfg['dropout'])
         self.mha = MultiHeadAttentionBlock(cfg)
         self.norm = nn.LayerNorm(cfg['embedding_dim'])
         self.ff = Feedforward(cfg)
@@ -114,12 +114,13 @@ class Model(nn.Module):
                 # Activation function
                 # Linear
         self.encoder = TransformerEncoder(cfg)
-        self.linear = nn.Linear(cfg['embedding_dim'], cfg['vocab_size'])
+        self.linear = nn.Linear(cfg['embedding_dim'], 2)
     
     def forward(self, x):
         batch_size, seq_len = x.shape
         x = self.input_embedding(x) + self.pos_embedding(torch.arange(seq_len, device=x.device))
         x = self.encoder(x)
+        x = x.mean(dim=1)
         logits = self.linear(x)
         return logits
 

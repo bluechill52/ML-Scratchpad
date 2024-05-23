@@ -3,6 +3,7 @@ import torchtext
 import tiktoken
 from torchtext.datasets import IMDB
 from collections import defaultdict
+from gpt import Model
 
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
 from functools import partial
@@ -146,7 +147,8 @@ if __name__ == '__main__':
     
     torch.manual_seed(123)
     
-    model = Net(cfg).to(device)
+    # model = Net(cfg).to(device)
+    model = Model(cfg).to(device)
     
     criterion = nn.CrossEntropyLoss()
     optim = torch.optim.Adam(model.parameters(), lr=settings['lr'])
