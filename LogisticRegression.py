@@ -1,7 +1,4 @@
-from sklearn.datasets import make_classification
-from sklearn.model_selection import train_test_split
 import numpy as np
-from typing import Dict
 
 
 class LogisticRegression:
@@ -76,31 +73,3 @@ class LogisticRegression:
     def predict(self, X: np.ndarray, threshold: float = 0.5) -> np.ndarray:
         """Returns hard binary labels {0, 1}. Shape: (N,)"""
         return (self.predict_proba(X) >= threshold).astype(int)
-
-if __name__ == '__main__':
-    # Create the dataset
-    X, Y = make_classification(n_samples=1000,
-                               n_features=10,
-                               random_state=42)
-    
-    trainX, valX, trainY, valY = train_test_split(X, Y, test_size=0.2, random_state=42)
-
-    # Compute mean and std from training data for normalization
-    mean, std = np.mean(trainX, axis=0), np.std(trainX, axis=0)
-
-    # Normalize training and validation data to 0 mean and unit std
-    trainX = (trainX - mean) / (std + 1e-9)
-    valX = (valX - mean) / (std + 1e-9)
-
-    # Verify shape of training and validation data
-    print(trainX.shape, valX.shape, trainY.shape, valY.shape)
-
-    model = LogisticRegression(lr=0.1, epochs=500, l2=0.01)
-    model.fit(trainX, trainY)
-
-
-
-
-
-
-

@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Dict
 
+
 # How many of predicted positive classes are actually correct
 def compute_precision(confusion_matrix: Dict):
     return confusion_matrix['TP'] / (confusion_matrix['TP'] + confusion_matrix['FP'] + 1e-9)
@@ -16,6 +17,40 @@ def compute_F1(confusion_matrix: Dict):
     recall = compute_recall(confusion_matrix)
 
     return 2 * precision * recall / (precision + recall + 1e-9)
+
+
+def get_best_threshold(probScores: np.ndarray, trueLabels: np.ndarray, metric: str = 'f1'):
+    thresholds = np.sort(np.unique(probScores))
+
+    best_metric_val = 0.0
+    best_threshold = 0.5
+    for threshold in thresholds:
+        predLabels = (probScores >= threshold).astype(int)
+        all_metrics = compute_all_metrics(predLabels, trueLabels)
+        metric_val = all_metrics[metric]
+
+        if metric_val > best_metric_val:
+            metric_val = best_metric_val
+            best_threshold = threshold
+    
+    return best_threshold
+
+
+def compute_all_metrics(predLabels: np.ndarray, trueLabels: np.ndarray):
+    cm = compute_confusion_matrix(predLabels, trueLabels)
+
+    # Compute accuracy, precision, recall, f1
+    accuracy = compute_accuracy(cm)
+    precision = compute_precision(cm)
+    recall = compute_recall(cm)
+    f1 = compute_F1(cm)
+
+    return {
+        'accuracy' : accuracy,
+        'precision' : precision,
+        'recall' : recall,
+        'f1' : f1,
+    }
 
 
 def compute_accuracy(confusion_matrix: Dict):
@@ -36,8 +71,8 @@ def compute_pr_curve(predProbs, trueY):
     for threshold in thresholds:
         predY = (predProbs >= threshold).astype(int)
         cm = compute_confusion_matrix(predY, trueY)
-        precisions.append(compute_precision(**cm))
-        recalls.append(compute_recall(**cm))
+        precisions.append(compute_precision(cm))
+        recalls.append(compute_recall(cm))
 
     return {'thresholds' : thresholds,
             'precisions' : precisions,
@@ -52,8 +87,8 @@ def compute_roc_curve(predProbs, trueY):
     for threshold in thresholds:
         predY = (predProbs >= threshold).astype(int)
         cm = compute_confusion_matrix(predY, trueY)
-        tpr = compute_recall(**cm)
-        fpr = cm['FP'] / (cm['FP'] + cm['TN'] + 1e-9)
+        tpr = compute_recall(cm)                      # How many of actual positive classes are predicted correctly
+        fpr = cm['FP'] / (cm['FP'] + cm['TN'] + 1e-9)   # How many of actual negative classes are predicted incorrectly
 
         tprs.append(tpr)
         fprs.append(fpr)
