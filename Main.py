@@ -22,9 +22,9 @@ if __name__ == '__main__':
 
 
     models = {
-        'modelA' : LogisticRegression(0.1, 10, 0.01),
-        'modelB' : LogisticRegression(0.2, 100, 0.02),
-        'modelC' : LogisticRegression(0.3, 500, 0.03),
+        'modelA' : LogisticRegression(0.1, 1000, 0.0),   # No L2 regularization
+        'modelB' : LogisticRegression(0.1, 1000, 0.01),  # l2 = 0.01
+        'modelC' : LogisticRegression(0.1, 1000, 0.1),  # l2 = 0.1
     }
 
     # Train the models
@@ -40,11 +40,6 @@ if __name__ == '__main__':
     benchmark = BenchmarkRunner(benchmarkData)
     benchmark.run(models)
 
-    # Verify shape of training and validation data
-    # print(trainX.shape, valX.shape, trainY.shape, valY.shape)
-
-    # model = LogisticRegression(lr=0.1, epochs=500, l2=0.01)
-    # model.fit(trainX, trainY)
 
 
 

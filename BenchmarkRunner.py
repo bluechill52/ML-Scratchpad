@@ -26,12 +26,12 @@ class BenchmarkRunner:
         for _ in range(self._benchmarkIters):
             startTime = perf_counter()
             probScores = model.predict_proba(self._inputs)
-            deltaTime = perf_counter() - startTime
+            deltaTime = (perf_counter() - startTime) * 1000
             latencies.append(deltaTime)
         
         latenciesNp = np.array(latencies)
 
-        p99 = np.percentile(latenciesNp, 0.99)
+        p99 = np.percentile(latenciesNp, 99)
         median = np.median(latenciesNp)
         mean = np.mean(latenciesNp)
 
@@ -52,9 +52,9 @@ class BenchmarkRunner:
 
     
     def run(self, models: Dict[str, LogisticRegression]):
-        for str in models.keys():
-            result = self.benchmarkSingleModel(models[str])
-            result['model_name'] = str
+        for name, model in models.items():
+            result = self.benchmarkSingleModel(model)
+            result['model_name'] = name
 
             print(result)
             self._results.append(result)

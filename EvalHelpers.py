@@ -28,9 +28,9 @@ def get_best_threshold(probScores: np.ndarray, trueLabels: np.ndarray, metric: s
         predLabels = (probScores >= threshold).astype(int)
         all_metrics = compute_all_metrics(predLabels, trueLabels)
         metric_val = all_metrics[metric]
-
+        
         if metric_val > best_metric_val:
-            metric_val = best_metric_val
+            best_metric_val = metric_val
             best_threshold = threshold
     
     return best_threshold
